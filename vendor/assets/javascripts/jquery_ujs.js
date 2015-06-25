@@ -112,16 +112,14 @@
 
     // Default way to get an element's href. May be overridden at $.rails.href.
     href: function(element) {
-      return element.attr('href');
+      return element[0].href;
     },
 
     // Submits "remote" forms and links with ajax
     handleRemote: function(element) {
-      var method, url, data, elCrossDomain, crossDomain, withCredentials, dataType, options;
+      var method, url, data, withCredentials, dataType, options;
 
       if (rails.fire(element, 'ajax:before')) {
-        elCrossDomain = element.data('cross-domain');
-        crossDomain = elCrossDomain === undefined ? null : elCrossDomain;
         withCredentials = element.data('with-credentials') || null;
         dataType = element.data('type') || ($.ajaxSettings && $.ajaxSettings.dataType);
 
@@ -167,7 +165,7 @@
           xhrFields: {
             withCredentials: withCredentials
           },
-          crossDomain: crossDomain
+          crossDomain: rails.isCrossDomain(url)
         };
         // Only pass url to `ajax` options if not blank
         if (url) { options.url = url; }
@@ -177,6 +175,26 @@
         return jqxhr;
       } else {
         return false;
+      }
+    },
+    // Determines if the request is a cross domain request.
+    isCrossDomain: function(url) {
+      var originAnchor = document.createElement("a");
+      originAnchor.href = location.href;
+      var urlAnchor = document.createElement("a");
+
+      try {
+        urlAnchor.href = url;
+        // This is a workaround to a IE bug.
+        urlAnchor.href = urlAnchor.href;
+
+        // Make sure that the browser parses the URL and that the protocols and hosts match.
+        return !urlAnchor.protocol || !urlAnchor.host ||
+               (originAnchor.protocol + "//" + originAnchor.host !==
+                  urlAnchor.protocol + "//" + urlAnchor.host);
+      } catch (e) {
+        // If there is an error parsing the URL, assume it is crossDomain.
+        return true;
       }
     },
 
@@ -191,7 +209,7 @@
         form = $('<form method="post" action="' + href + '"></form>'),
         metadata_input = '<input name="_method" value="' + method + '" type="hidden" />';
 
-      if (csrf_param !== undefined && csrf_token !== undefined) {
+      if (csrf_param !== undefined && csrf_token !== undefined && !rails.isCrossDomain(href)) {
         metadata_input += '<input name="' + csrf_param + '" value="' + csrf_token + '" type="hidden" />';
       }
 
